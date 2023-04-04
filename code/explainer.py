@@ -9,13 +9,15 @@ import matplotlib.pyplot as plt
 
 class BayesExplainer():
 
-    def __init__(self, data, label_col, cat_features, num_features):
+    def __init__(self, data, label_col, cat_features, num_features, threshold=0.7, num_samples=20000):
         #определение кластерной матрицы
         self.data = data
         self.label_col = label_col
         self.num_clusters = data['label_col'].nunique()
         self.cat_features = cat_features
         self.num_features = num_features
+        self.threshhold = threshold
+        self.num_samples = num_samples
         self.num_observations = self.data[label_col].value_counts()
         self.cluster_table = self._create_cluster_table()
         
@@ -36,6 +38,45 @@ class BayesExplainer():
         self.calc_feature_prob_in_cluster()
         self.plot_feature_prob_in_clusters()
 
+        # num_clusters = 10
+        # num_samples = 20000
+        # threshhold = 0.7
+
+        #создаем датафрейм для сохранения промежуточных рассчетов
+        df_bayesian_analysis = pd.DataFrame(index=self.cluster_table.index)
+        df_bayesian_analysis['num_observations'] = self.cluster_table['num_observations']
+        #создаем датафрейм для сохранения оценок значимости признака
+        df_importance_scores = pd.DataFrame(index=self.cluster_table.index)
+
+        #запускаем алгоритм для каждого признака
+        for feature in self.cat_features:
+            print(feature)
+            #рассчитываем априорную вероятность наличия признака во всех кластерах
+            df_bayesian_analysis[feature + ' conversions'] = self.cluster_table[feature]
+            
+            #рассчитываем апостериорную вероятность признака во всех кластерах
+            df_bayesian_analysis[feature + ' posterior'] = df_bayesian_analysis[['num_observations',
+                                                                        feature + ' conversions']]\
+                                                                            .apply(lambda a: self.calc_posterior(a[0], a[1]),axis=1)
+            #сэсплируем точки из апостериорного распределения
+            df_bayesian_analysis[feature + ' samples'] = df_bayesian_analysis[feature + ' posterior']\
+                .apply(lambda a: self.get_samples_from_dist(a, self.num_samples))
+            
+            #визуализируем апостериорное распределение на графике
+            self.plot_posteriors(df_bayesian_analysis, feature)
+            
+            #вычисляем матрицу попарных сравнений вероятности наличия признака во всех кластерах
+            posterior_comparison = self.calc_posterior_comparison_matrix(df_bayesian_analysis, feature)
+            
+            #оцениваем значимость признака для каждого кластера
+            df_importance_scores[feature] = None
+            for index in df_importance_scores.index:
+                df_importance_scores[feature].loc[index] = (posterior_comparison.loc[index] >= self.threshhold).sum()
+            
+            #визуализируем матрицу попарных сравнений
+            self.plot_posterior_matrix(posterior_comparison)
+    
+
 
     def plot_feature_prob_in_cluster(self, column):
         '''
@@ -53,20 +94,20 @@ class BayesExplainer():
         plt.show()
 
     def plot_feature_prob_in_clusters(self):
-        for column in self.binary_columns:
-            self.plot_feature_probability_across_clusters(column)
+        for feature in self.cat_features:
+            self.plot_feature_probability_across_clusters(feature)
 
-    def calc_posterior(self, feature_prob, num_samples=20000, alpha_prior=1, beta_prior=1):
+    def calc_posterior(self, cl_num_observations, feature_prob, alpha_prior=1, beta_prior=1):
         #TO DO: Numerical Case
         #assuming prior - beta(1, 1) - то же самое, что и uniform on [0,1]
         """
         Calculation of posterior distribution for binary features
         """
-        posterior = beta(alpha_prior+feature_prob, beta_prior+self.num_observations-feature_prob)
+        posterior = beta(alpha_prior+feature_prob, beta_prior+cl_num_observations-feature_prob)
         return posterior
 
-    def get_samples_from_dist(self, posterior, num_samples):
-        return posterior.rvs(num_samples)
+    def get_samples_from_dist(self, posterior):
+        return posterior.rvs(self.num_samples)
         
     def plot_posteriors(self, df, column, ylim=100, xmin=0, xmax=1, title=None):
         if not title:
@@ -76,7 +117,7 @@ class BayesExplainer():
         plt.rcParams['figure.dpi'] = 300
         x = np.linspace(0,1, 500)
         for i in range(1, self.num_clusters+1):
-            if i > 9:
+            if i > 9: #Need adaptive plotting
                 plt.plot(x, df[column+ ' posterior'].loc[i].pdf(x), '.', label=f'cluster {i}')
                 
             else:
