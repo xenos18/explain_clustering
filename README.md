@@ -29,6 +29,7 @@ The clustering result analyzer is easy to use. Simply provide the output file of
 ```
 from sklearn import datasets
 from sklearn.clusters import Kmeans
+from explainer import BayesExplainer
 
 #Data Loading
 df = datasets.make_blobs(n_samples=n_samples, random_state=8)
