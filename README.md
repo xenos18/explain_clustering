@@ -26,7 +26,24 @@ To install the clustering result analyzer, follow these steps:
 
 The clustering result analyzer is easy to use. Simply provide the output file of a clustering algorithm and the algorithm will analyze the results and generate insights. You can also specify various parameters to customize the analysis process.
 
-``` python main.py --input path/to/clustering/output --param1 value1 --param2 value2 ```
+```
+from sklearn import datasets
+from sklearn.clusters import Kmeans
+
+#Data Loading
+df = datasets.make_blobs(n_samples=n_samples, random_state=8)
+features = df.columns
+
+#Clustering
+kmeans = KMeans(init="k-means++", n_clusters=5,n_init=10, max_iter=1000, random_state=24,)
+kmeans.fit(df)
+df['k_means_labels'] = kmeans.labels_
+
+#Interpretation
+bi_explainer = BayesExplainer(df, 'k_means_labels', features, [] )
+significance_matrix = bi_explainer.explain(verbose=False)
+
+```
 
 ## Documentation
 
