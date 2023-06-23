@@ -40,7 +40,7 @@ kmeans.fit(df)
 df['k_means_labels'] = kmeans.labels_
 
 #Interpretation
-bi_explainer = BayesExplainer(df, 'k_means_labels', features, [] )
+bi_explainer = BayesExplainer(data=df, label_col='k_means_labels', cat_features=None, num_features=features)
 significance_matrix = bi_explainer.explain(verbose=False)
 
 ```
